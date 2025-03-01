@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>電視產品測試安排</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+    <h2>電視產品測試安排</h2>
+    
+    <input type="file" id="fileInput">
+    <button onclick="uploadFile()">上傳 Excel</button>
+    <p id="uploadStatus"></p> <!-- 顯示上傳狀態 -->
+
+    <h3>選擇變更材料</h3>
+    <input type="text" id="materialInput" oninput="matchMaterial()" placeholder="輸入變更材料">
+    <select id="materialSelect"></select>
+    <button onclick="calculateTests()">計算測試需求</button>
+
+    <h3>測試安排結果</h3>
+    <table border="1" id="testResults">
+        <tr>
+            <th>測試部門</th>
+            <th>所需樣機數</th>
+        </tr>
+    </table>
+    
+    <script>
+        let materials = [];
+
+        function uploadFile() {
+            let fileInput = document.getElementById('fileInput');
+            let file = fileInput.files[0];
+
+            if (!file) {
+                document.getElementById('uploadStatus').textContent = "❌ 請選擇要上傳的 Excel 檔案！";
+                document.getElementById('uploadStatus').style.color = "red";
+                return;
+            }
+
+            let formData = new FormData();
+            formData.append('file', file);
+            
+            $.ajax({
+                url: 'http://127.0.0.1:5000/upload',
+                type: 'POST',
+                data: formData,
+                contentType: false,
+                processData: false,
+                success: function(response) {
+                    console.log("✅ 伺服器回應:", response);
+                    document.getElementById('uploadStatus').textContent = `✅ 文件 "${file.name}" 上傳成功！`;
+                    document.getElementById('uploadStatus').style.color = "green";
+                    
+                    materials = response.change_materials;
+                    let select = document.getElementById('materialSelect');
+                    select.innerHTML = '';
+
+                    if (materials.length === 0) {
+                        document.getElementById('uploadStatus').textContent += " ⚠️ 但未找到變更材料！";
+                        document.getElementById('uploadStatus').style.color = "orange";
+                    }
+
+                    materials.forEach(m => {
+                        let option = document.createElement('option');
+                        option.value = m;
+                        option.textContent = m;
+                        select.appendChild(option);
+                    });
+                },
+                error: function(xhr, status, error) {
+                    console.error("❌ 上傳失敗:", error);
+                    document.getElementById('uploadStatus').textContent = "❌ 上傳失敗：" + error;
+                    document.getElementById('uploadStatus').style.color = "red";
+                }
+            });
+        }
+
+        function matchMaterial() {
+            let input = document.getElementById('materialInput').value;
+            
+            fetch('http://127.0.0.1:5000/match', {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ material: input })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log("🔍 匹配結果:", data);
+                let select = document.getElementById('materialSelect');
+                select.innerHTML = '';
+                data.matched.forEach(m => {
+                    let option = document.createElement('option');
+                    option.value = m;
+                    option.textContent = m;
+                    select.appendChild(option);
+                });
+            })
+            .catch(error => {
+                console.error("❌ 匹配錯誤:", error);
+            });
+        }
+
+        function calculateTests() {
+            let selectedMaterial = document.getElementById('materialSelect').value;
+            
+            fetch('http://127.0.0.1:5000/calculate', {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ material: selectedMaterial })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log("📊 測試計算結果:", data);
+                let table = document.getElementById('testResults');
+                table.innerHTML = '<tr><th>測試部門</th><th>所需樣機數</th></tr>';
+                for (let dept in data.test_counts) {
+                    let row = `<tr><td>${dept}</td><td>${data.test_counts[dept]}</td></tr>`;
+                    table.innerHTML += row;
+                }
+            })
+            .catch(error => {
+                console.error("❌ 計算錯誤:", error);
+            });
+        }
+    </script>
+</body>
+</html>
